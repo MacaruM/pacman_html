@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pacman Game</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+
+        #gameContainer {
+            position: relative;
+            text-align: center;
+        }
+
+        #nicknameForm {
+            margin-bottom: 10px;
+        }
+
+        #nicknameDisplay {
+            position: absolute;
+            top: -20px; /* Posiziona il nickname sopra al Pacman */
+            left: 50%; /* Posiziona il nickname orizzontalmente al centro del Pacman */
+            transform: translateX(-50%); /* Centra il nickname rispetto al Pacman */
+            font-weight: bold;
+            color: white; /* Colore del testo bianco */
+        }
+
+        #gameCanvas {
+            border: 2px solid black;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="nicknameForm">
+            <input type="text" id="nicknameInput" placeholder="Enter your nickname">
+            <button onclick="setNickname()">Set Nickname</button>
+        </div>
+        <div id="nicknameDisplay" style="display:none;"></div> <!-- Div per visualizzare il nickname sopra al Pacman -->
+        <button id="startButton" style="display:none;" onclick="startGame()">Start Game</button>
+
+        <!-- Pacman game canvas -->
+        <canvas id="gameCanvas" width="400" height="400" style="display:none;"></canvas>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        let pacmanPosition = { x: 200, y: 200 }; // Posizione iniziale di Pac-Man
+        const stepSize = 2; // Dimensione del passo per ogni movimento
+        const obstacles = [ // Posizione e dimensione degli ostacoli
+            { x: 50, y: 50, width: 300, height: 30 },
+            { x: 50, y: 120, width: 30, height: 180 },
+            { x: 320, y: 120, width: 30, height: 180 },
+            { x: 50, y: 290, width: 300, height: 30 },
+            { x: 120, y: 190, width: 160, height: 30 },
+            { x: 120, y: 260, width: 30, height: 30 },
+            { x: 250, y: 260, width: 30, height: 30 },
+            { x: 150, y: 20, width: 100, height: 10 }, // Rettangolo sopra al rettangolo centrale
+            { x: 150, y: 370, width: 100, height: 10 }, // Rettangolo sotto al rettangolo centrale
+            { x: 180, y: 50, width: 10, height: 100 }, // Ostacolo verticale a sinistra
+            { x: 210, y: 50, width: 10, height: 100 }, // Ostacolo verticale a destra
+            { x: 180, y: 250, width: 10, height: 100 }, // Ostacolo verticale a sinistra
+            { x: 210, y: 250, width: 10, height: 100 } // Ostacolo verticale a destra
+        ];
+
+        // Dimensioni del rettangolo esterno del labirinto
+        const outerWidth = 400;
+        const outerHeight = 400;
+
+        // Velocità di movimento attuale di Pac-Man
+        let pacmanSpeed = stepSize;
+
+        function setNickname() {
+            const nickname = document.getElementById('nicknameInput').value;
+            document.getElementById('nicknameForm').style.display = 'none';
+            document.getElementById('nicknameDisplay').innerText = nickname; // Mostra solo il nome inserito come nickname
+            document.getElementById('nicknameDisplay').style.display = 'block';
+            socket.emit('nickname', nickname);
+            document.getElementById('startButton').style.display = 'block';
+        }
+
+        function startGame() {
+            socket.emit('startGame');
+        }
+
+        // Funzione per disegnare il gioco
+        function drawGame() {
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+
+            // Disegna il labirinto esterno
+            ctx.fillStyle = 'black'; // Sfondo nero
+            ctx.fillRect(0, 0, outerWidth, outerHeight);
+
+            // Disegna i contorni del labirinto esterno
+            ctx.strokeStyle = 'red'; // Contorno rosso
+            ctx.lineWidth = 2; // Spessore della linea
+            ctx.beginPath();
+            ctx.rect(0, 0, outerWidth, outerHeight);
+            ctx.stroke();
+
+            // Disegna gli ostacoli
+            ctx.fillStyle = 'red'; // Colore rosso per gli ostacoli
+            obstacles.forEach(obstacle => {
+                ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height); // Disegna un rettangolo per ogni ostacolo
+            });
+
+            // Disegna Pac-Man
+            drawPacman(ctx);
+        }
+
+        // Funzione per disegnare Pac-Man con la bocca in base alla direzione
+        function drawPacman(ctx) {
+            ctx.fillStyle = 'yellow'; // Colore giallo
+            ctx.beginPath();
+            if (currentDirection === 'up') {
+                drawPacmanMouthUp(ctx);
+            } else if (currentDirection === 'down') {
+                drawPacmanMouthDown(ctx);
+            } else if (currentDirection === 'left') {
+                drawPacmanMouthLeft(ctx);
+            } else if (currentDirection === 'right') {
+                drawPacmanMouthRight(ctx);
+            } else {
+                // Se Pac-Man non si sta muovendo, disegna un cerchio pieno
+                ctx.arc(pacmanPosition.x, pacmanPosition.y, 10, 0, 2 * Math.PI);
+            }
+            ctx.lineTo(pacmanPosition.x, pacmanPosition.y);
+            ctx.closePath();
+            ctx.fill();
+
+            // Aggiorna la posizione del nickname sopra Pac-Man
+            document.getElementById('nicknameDisplay').style.left = `${pacmanPosition.x}px`;
+            document.getElementById('nicknameDisplay').style.top = `${pacmanPosition.y - 20}px`; // Sposta il nickname sopra Pac-Man
+        }
+
+        // Funzioni per disegnare la bocca di Pac-Man in diverse direzioni
+        function drawPacmanMouthUp(ctx) {
+            ctx.arc(pacmanPosition.x, pacmanPosition.y, 10, 1.75 * Math.PI, 1.25 * Math.PI);
+        }
+
+        function drawPacmanMouthDown(ctx) {
+            ctx.arc(pacmanPosition.x, pacmanPosition.y, 10, 0.75 * Math.PI, 0.25 * Math.PI);
+        }
+
+        function drawPacmanMouthLeft(ctx) {
+            ctx.arc(pacmanPosition.x, pacmanPosition.y, 10, 1.25 * Math.PI, 0.75 * Math.PI);
+        }
+
+        function drawPacmanMouthRight(ctx) {
+            ctx.arc(pacmanPosition.x, pacmanPosition.y, 10, 0.25 * Math.PI, 1.75 * Math.PI);
+        }
+
+        // Funzione per gestire i movimenti di Pac-Man
+        function movePacman(direction) {
+            const newPosition = { ...pacmanPosition }; // Crea una copia della posizione corrente di Pac-Man
+            switch (direction) {
+                case 'up':
+                    newPosition.y -= pacmanSpeed;
+                    break;
+                case 'down':
+                    newPosition.y += pacmanSpeed;
+                    break;
+                case 'left':
+                    newPosition.x -= pacmanSpeed;
+                    break;
+                case 'right':
+                    newPosition.x += pacmanSpeed;
+                    break;
+            }
+            // Verifica se la nuova posizione di Pac-Man è all'interno del labirinto esterno o oltre gli ostacoli
+            if (newPosition.x >= 0 && newPosition.x <= outerWidth && newPosition.y >= 0 && newPosition.y <= outerHeight && !collidesWithObstacle(newPosition)) {
+                pacmanPosition = newPosition;
+                // Invia l'aggiornamento della posizione al server
+                socket.emit('movePlayer', { x: pacmanPosition.x - newPosition.x, y: pacmanPosition.y - newPosition.y });
+            }
+
+            // Riduci la velocità di Pac-Man durante il cambio di direzione
+            if (pacmanSpeed > stepSize) {
+                pacmanSpeed -= 0.1;
+            } else {
+                pacmanSpeed = stepSize;
+            }
+
+            drawGame(); // Ridisegna il gioco dopo il movimento
+        }
+
+        // Funzione per verificare se la posizione si scontra con un ostacolo
+        function collidesWithObstacle(position) {
+            return obstacles.some(obstacle => {
+                return position.x >= obstacle.x && position.x <= obstacle.x + obstacle.width &&
+                    position.y >= obstacle.y && position.y <= obstacle.y + obstacle.height;
+            });
+        }
+
+        // Variabile per memorizzare la direzione corrente di Pac-Man
+        let currentDirection = null;
+
+        // Funzione per muovere Pac-Man continuamente
+        function moveContinuous() {
+            if (currentDirection) {
+                movePacman(currentDirection);
+            }
+            requestAnimationFrame(moveContinuous);
+        }
+
+        // Avvia il movimento continuo quando il gioco inizia
+        socket.on('startGame', () => {
+            // Genera una posizione casuale per Pac-Man che non collida con gli ostacoli
+            do {
+                pacmanPosition = {
+                    x: Math.floor(Math.random() * outerWidth),
+                    y: Math.floor(Math.random() * outerHeight)
+                };
+            } while (collidesWithObstacle(pacmanPosition));
+
+            document.getElementById('startButton').style.display = 'none';
+            document.getElementById('gameCanvas').style.display = 'block';
+            drawGame();
+            moveContinuous();
+        });
+
+        // Gestione degli eventi della tastiera per impostare la direzione di Pac-Man
+        document.addEventListener('keydown', (event) => {
+            switch (event.key) {
+                case 'ArrowUp':
+                    currentDirection = 'up';
+                    pacmanSpeed = stepSize; // Reimposta la velocità quando si cambia direzione
+                    break;
+                case 'ArrowDown':
+                    currentDirection = 'down';
+                    pacmanSpeed = stepSize;
+                    break;
+                case 'ArrowLeft':
+                    currentDirection = 'left';
+                    pacmanSpeed = stepSize;
+                    break;
+                case 'ArrowRight':
+                    currentDirection = 'right';
+                    pacmanSpeed = stepSize;
+                    break;
+            }
+        });
+
+        // Aggiorna la posizione dei giocatori
+        socket.on('updatePlayers', (players) => {
+            // Aggiorna la posizione dei giocatori
+            for (const playerId in players) {
+                const player = players[playerId];
+                // Aggiorna solo la posizione se il giocatore esiste e non sei tu
+                if (player && playerId !== socket.id) {
+                    // Aggiorna la posizione del giocatore
+                    drawPacman(ctx, player.x, player.y);
+                }
+            }
+        });
+
+        // Aggiorna la posizione di un giocatore
+        socket.on('updatePlayerPosition', ({ id, position }) => {
+            // Disegna il giocatore solo se non sei tu
+            if (id !== socket.id) {
+                drawPacman(ctx, position.x, position.y);
+            }
+        });
+    </script>
+</body>
+</html>
