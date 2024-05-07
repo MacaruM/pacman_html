@@ -12,6 +12,7 @@
             height: 100vh;
             margin: 0;
             font-family: Arial, sans-serif;
+            position: relative; /* Aggiunto per consentire il posizionamento assoluto del contatore */
         }
 
         #gameContainer {
@@ -34,6 +35,16 @@
 
         #gameCanvas {
             border: 2px solid black;
+            margin-top: 20px; /* Aggiunto per spostare la mappa leggermente più in basso */
+        }
+
+        #ghostsEatenCounter {
+            position: absolute;
+            top: -40px; /* Spostato ulteriormente verso l'alto, fuori dalla mappa */
+            left: 20px; /* Spostato ulteriormente verso sinistra */
+            background-color: rgba(255, 255, 255, 0.5); /* Sfondo trasparente */
+            padding: 5px 10px; /* Aggiunge spazio intorno al testo */
+            border-radius: 5px; /* Bordo arrotondato */
         }
     </style>
 </head>
@@ -46,10 +57,18 @@
         <div id="nicknameDisplay" style="display:none;"></div> <!-- Div per visualizzare il nickname sopra al Pacman -->
         <button id="startButton" style="display:none;" onclick="startGame()">Start Game</button>
 
+        <!-- Contatore fantasmini mangiati -->
+        <div id="ghostsEatenCounter" style="display:none;">Ghosts Eaten: 0</div>
+
         <!-- Pacman game canvas -->
         <canvas id="gameCanvas" width="400" height="400" style="display:none;"></canvas>
     </div>
-
+  
+    <div id="gameOverScreen" style="display: none;">
+    <h1>Game Over</h1>
+    <button onclick="restartGame()">Restart</button>
+    </div>
+  
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
@@ -77,6 +96,15 @@
 
         // Velocità di movimento attuale di Pac-Man
         let pacmanSpeed = stepSize;
+
+        // Array per memorizzare le posizioni dei fantasmini
+        let ghosts = [];
+
+        // Contatore fantasmini mangiati
+        let ghostsEatenCount = 0;
+
+        // Stato del gioco
+        let gameStarted = false;
 
         function setNickname() {
             const nickname = document.getElementById('nicknameInput').value;
@@ -115,6 +143,9 @@
 
             // Disegna Pac-Man
             drawPacman(ctx);
+
+            // Disegna i fantasmini
+            drawGhosts(ctx);
         }
 
         // Funzione per disegnare Pac-Man con la bocca in base alla direzione
@@ -159,6 +190,28 @@
             ctx.arc(pacmanPosition.x, pacmanPosition.y, 10, 0.25 * Math.PI, 1.75 * Math.PI);
         }
 
+        // Funzione per disegnare i fantasmini
+        function drawGhosts(ctx) {
+            ctx.fillStyle = 'blue'; // Colore dei fantasmi
+
+            ghosts.forEach((ghost, index) => {
+                ctx.fillRect(ghost.x, ghost.y, 10, 10); // Disegna un fantasmino rettangolare
+            });
+        }
+
+        // Funzione per il respawn di un fantasmino mangiato
+        function respawnGhost() {
+            let newGhostPos;
+            do {
+                newGhostPos = {
+                    x: Math.floor(Math.random() * outerWidth),
+                    y: Math.floor(Math.random() * outerHeight)
+                };
+            } while (collidesWithObstacle(newGhostPos));
+
+            ghosts.push(newGhostPos); // Aggiunge il nuovo fantasmino all'array
+        }
+
         // Funzione per gestire i movimenti di Pac-Man
         function movePacman(direction) {
             const newPosition = { ...pacmanPosition }; // Crea una copia della posizione corrente di Pac-Man
@@ -183,14 +236,27 @@
                 socket.emit('movePlayer', { x: pacmanPosition.x - newPosition.x, y: pacmanPosition.y - newPosition.y });
             }
 
-            // Riduci la velocità di Pac-Man durante il cambio di direzione
-            if (pacmanSpeed > stepSize) {
-                pacmanSpeed -= 0.1;
-            } else {
-                pacmanSpeed = stepSize;
-            }
+            checkGhostCollision(); // Controlla la collisione con i fantasmini
 
             drawGame(); // Ridisegna il gioco dopo il movimento
+        }
+
+        // Funzione per controllare la collisione di Pac-Man con i fantasmini
+        function checkGhostCollision() {
+            ghosts.forEach((ghost, index) => {
+                if (
+                    pacmanPosition.x >= ghost.x &&
+                    pacmanPosition.x <= ghost.x + 10 &&
+                    pacmanPosition.y >= ghost.y &&
+                    pacmanPosition.y <= ghost.y + 10
+                ) {
+                    // Pac-Man ha mangiato il fantasmino
+                    ghosts.splice(index, 1); // Rimuove il fantasmino mangiato dall'array
+                    respawnGhost(); // Respawn di un nuovo fantasmino
+                    ghostsEatenCount++; // Incrementa il contatore dei fantasmini mangiati
+                    updateGhostsEatenCount(ghostsEatenCount); // Aggiorna il contatore visualizzato
+                }
+            });
         }
 
         // Funzione per verificare se la posizione si scontra con un ostacolo
@@ -222,8 +288,16 @@
                 };
             } while (collidesWithObstacle(pacmanPosition));
 
+            // Genera posizioni casuali per i fantasmini
+            for (let i = 0; i < 5; i++) {
+                respawnGhost();
+            }
+
+            gameStarted = true; // Imposta lo stato del gioco a "iniziato"
             document.getElementById('startButton').style.display = 'none';
             document.getElementById('gameCanvas').style.display = 'block';
+            document.getElementById('ghostsEatenCounter').style.display = 'block'; // Mostra il contatore
+            updateGhostsEatenCount(ghostsEatenCount); // Aggiorna il contatore visualizzato
             drawGame();
             moveContinuous();
         });
@@ -270,6 +344,63 @@
                 drawPacman(ctx, position.x, position.y);
             }
         });
+
+        // Funzione per aggiornare il contatore dei fantasmini mangiati
+        function updateGhostsEatenCount(count) {
+            document.getElementById('ghostsEatenCounter').innerText = `Ghosts Eaten: ${count}`;
+        }
+      
+      let gameTimer; // Variabile per memorizzare il timer del gioco
+
+// Funzione per avviare il timer del gioco
+function startGameTimer() {
+    gameTimer = setTimeout(gameOver, 10000); // Avvia il timer di 10 secondi
+}
+
+// Funzione per gestire la schermata di game over
+function gameOver() {
+    // Nasconde il canvas di gioco e il contatore dei fantasmini mangiati
+    document.getElementById('gameCanvas').style.display = 'none';
+    document.getElementById('ghostsEatenCounter').style.display = 'none';
+
+    // Mostra la schermata di game over
+    const gameOverScreen = document.createElement('div');
+    gameOverScreen.innerHTML = `
+        <h1>Game Over</h1>
+        <button onclick="restartGame()">Restart</button>
+    `;
+    document.body.appendChild(gameOverScreen);
+}
+
+// Funzione per riavviare il gioco
+function restartGame() {
+    // Rimuove la schermata di game over
+    document.querySelector('div').remove();
+
+    // Resetta lo stato del gioco
+    gameStarted = false;
+    ghostsEatenCount = 0;
+
+    // Pulisce il canvas
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Mostra il pulsante "Start Game" e il form del nickname
+    document.getElementById('startButton').style.display = 'block';
+    document.getElementById('nicknameForm').style.display = 'block';
+
+    // Resetta il timer del gioco
+    clearTimeout(gameTimer);
+  
+}
+
+// Aggiorna la funzione startGame() per avviare il timer del gioco
+function startGame() {
+    startGameTimer(); // Avvia il timer del gioco
+    socket.emit('startGame');
+}
+
     </script>
 </body>
 </html>
