@@ -12,8 +12,12 @@
             height: 100vh;
             margin: 0;
             font-family: Arial, sans-serif;
-            position: relative; /* Aggiunto per consentire il posizionamento assoluto del contatore */
+            background-image: url('https://cdn.glitch.global/efee79cf-ffba-43d4-a89a-08bf125eb9c4/pacmanNick.jpg?v=1716280741294'); /* Percorso dell'immagine di sfondo */
+            background-size: cover; /* Adatta l'immagine per coprire l'intero sfondo */
+            background-position: center; /* Centra l'immagine */
         }
+
+        
 
         #gameContainer {
             position: relative;
@@ -45,6 +49,11 @@
             background-color: rgba(255, 255, 255, 0.5); /* Sfondo trasparente */
             padding: 5px 10px; /* Aggiunge spazio intorno al testo */
             border-radius: 5px; /* Bordo arrotondato */
+        }
+      
+      #gameOverScreen {
+            display: none;
+            color: red; /* Imposta il colore del testo a rosso */
         }
     </style>
 </head>
@@ -120,6 +129,7 @@
         }
 
         function startGame() {
+            
             socket.emit('startGame');
         }
 
@@ -383,6 +393,8 @@ function gameOver() {
     // Nasconde il canvas di gioco e il contatore dei fantasmini mangiati
     document.getElementById('gameCanvas').style.display = 'none';
     document.getElementById('ghostsEatenCounter').style.display = 'none';
+    document.getElementById('nicknameDisplay').innerText = "";
+    
 
     // Mostra la schermata di game over
     const gameOverScreen = document.getElementById('gameOverScreen');
